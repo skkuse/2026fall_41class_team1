@@ -117,8 +117,8 @@ def main() -> int:
     start = len(list(RAW_DIR.glob("capture_*.json")))
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
-        context = browser.new_context()  # 저장된 쿠키 없음, 끝나면 사라짐
+        browser = p.chromium.launch(headless=False, args=["--start-maximized"])
+        context = browser.new_context(no_viewport=True)  # 창 크기 그대로 사용. 저장된 쿠키 없음, 끝나면 사라짐
         page = context.new_page()
         page.goto(args.url)
 
