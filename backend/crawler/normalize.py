@@ -66,12 +66,21 @@ def match_header(cell: str) -> str | None:
     return None
 
 
+# 로드맵과 GLS 가 같은 과목을 다르게 적는 경우 (2026-11-24 실제 수집 결과에서 확인)
+SPELLING = [
+    ("네트웍", "네트워크"),   # GLS '컴퓨터네트웍개론' = 로드맵 '컴퓨터네트워크개론'
+    ("sw", "소프트웨어"),     # 로드맵 '오픈소스SW실습' = GLS '오픈소스소프트웨어실습'
+]
+
+
 def name_key(name: str) -> str:
-    """과목명 비교용 키: 공백·가운데점·괄호 내용 제거, Ⅰ/Ⅱ → 1/2."""
+    """과목명 비교용 키: 공백·가운데점·괄호 내용 제거, Ⅰ/Ⅱ → 1/2, 표기 차이 통일."""
     s = (name or "").replace("Ⅰ", "1").replace("Ⅱ", "2").replace("Ⅲ", "3")
     s = re.sub(r"\(.*?\)|\[.*?\]", "", s)
-    s = re.sub(r"[\s·・\.\-_/]", "", s)
-    return s.lower()
+    s = re.sub(r"[\s·・\.\-_/]", "", s).lower()
+    for a, b in SPELLING:
+        s = s.replace(a, b)
+    return s
 
 
 def parse_credits(s: str) -> str:
@@ -141,10 +150,18 @@ def main() -> int:
     for r in gls:
         gls_by_key.setdefault(name_key(r["name"]), []).append(r)
 
+    seed_name_count: dict[str, int] = {}
+    for s in seed:
+        seed_name_count[name_key(s["name"])] = seed_name_count.get(name_key(s["name"]), 0) + 1
+
     report, merged, used = [], [], set()
     for s in seed:
-        cands = gls_by_key.get(name_key(s["name"]), [])
-        if len(cands) > 1:  # 정보보호개론처럼 같은 이름이 여럿이면 이수구분으로 한 번 더 좁힌다
+        key = name_key(s["name"])
+        cands = [c for c in gls_by_key.get(key, []) if id(c) not in used]  # 한 GLS 행은 한 번만 쓴다
+        if seed_name_count[key] > 1:
+            # 로드맵에 같은 이름이 여러 번(예: 정보보호개론 전공심화/학석공통) → 구분이 같은 것만 인정
+            cands = [c for c in cands if c.get("category") == s["category"]]
+        elif len(cands) > 1:
             narrowed = [c for c in cands if s["category"] in c.get("category", "")]
             cands = narrowed or cands
         row = {c: s.get(c, "") for c in SEED_COLUMNS}
