@@ -1,0 +1,18 @@
+# 비밀 정보 — 절대 커밋하지 않기
+.env
+.env.*
+*.pem
+*_storage_state.json
+
+# GLS 수집 결과 (화면 원본에 개인정보가 섞일 수 있음)
+backend/crawler/raw/
+backend/crawler/out/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 노션 내보내기 파일 (API 키가 들어 있음)
+*Export*.zip
