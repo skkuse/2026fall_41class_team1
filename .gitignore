@@ -5,8 +5,8 @@
 *_storage_state.json
 
 # GLS 수집 결과 (화면 원본에 개인정보가 섞일 수 있음)
-backend/crawler/raw/
-backend/crawler/out/
+backend/crawler/raw*/
+backend/crawler/out*/
 
 # Python
 __pycache__/
