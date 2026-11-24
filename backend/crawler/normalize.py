@@ -114,6 +114,10 @@ def load_gls_rows():
                 # "AI캡스톤디자인 / AI Capstone Design" → 한글명, 영문명
                 parts = [p.strip() for p in rec["name"].split(" / ")]
                 rec["name"], rec["name_en"] = parts[0], " ".join(parts[1:])
+                # 대학원-교육과정 화면은 영역구분이 비어 있다. 과목구분 '학사/석사' = 학석공통,
+                # '석사/박사' = 대학원 전용 (2026-11-24 ESW4020 정보보호개론 등으로 확인)
+                if not rec.get("category") and re.sub(r"\s", "", rec.get("level", "")) == "학사/석사":
+                    rec["category"] = "학석공통"
                 rec["_file"] = path.name
                 rows.append(rec)
     # 같은 학수번호(또는 이름)가 여러 화면에 나오면 하나만 남긴다
