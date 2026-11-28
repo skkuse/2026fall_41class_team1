@@ -1,6 +1,6 @@
-# 교과목 DB + GLS 수집 도구
+# 교과목 DB + 수집 도구 (GLS · 학과 홈페이지)
 
-담당: 김규성 (백엔드). KingoZeta 교과 추천에 쓰는 교과목 DB 를 Supabase 에 만들고, GLS 교육과정에서 학수번호·학점 같은 사실 정보를 채운다.
+담당: 김규성 (백엔드). KingoZeta 교과 추천에 쓰는 교과목 DB 를 Supabase 에 만들고, 학과 홈페이지 교육과정에서 학수번호·개설 여부·교과목 개요를, GLS 교육과정에서 학수번호·학점을 채운다.
 `db/schema_courses.sql` 은 팀 검토 전 **초안**이다.
 
 ```
@@ -8,12 +8,19 @@ backend/
 ├─ db/
 │  ├─ schema_courses.sql       # 테이블 만들기 (courses, course_prerequisites, course_tags)
 │  ├─ seed_courses_2026.csv    # 2026 로드맵 76과목 (과목명·구분·학년·학기·분야 태그)
-│  └─ seed_courses_2026.sql    # 위 CSV 를 넣는 INSERT 문
+│  ├─ seed_courses_2026.sql    # 위 CSV 를 넣는 INSERT 문
+│  ├─ courses_2026_homepage.csv/.json  # 로드맵 76과목 + 홈페이지 학수번호·개설 여부·개요 (73/76)
+│  ├─ homepage_courses_all.json        # 홈페이지 교육과정 전체 131과목 + 개요 (AI 프롬프트용)
+│  └─ courses_2026_gls.csv/.sql        # 로드맵 76과목 + GLS 학수번호·학점 (56/76, 확인용)
 └─ crawler/
-   ├─ gls_capture.py           # GLS 화면의 표만 저장 (로그인은 사람이 직접)
-   ├─ normalize.py             # 저장한 표 정리 + 시드와 합치기
-   ├─ to_sql.py                # CSV → INSERT 문 변환
-   └─ requirements.txt
+   ├─ requirements.txt
+   ├─ course_names.py          # 공용: 과목명 비교 규칙 (gls/, homepage/ 가 같이 씀)
+   ├─ to_sql.py                # 공용: courses 형식 CSV → Supabase INSERT 문
+   ├─ homepage/
+   │  └─ homepage_curriculum.py  # 학과 홈페이지 교육과정 표 + 교과목 개요 수집 (로그인 없음)
+   └─ gls/
+      ├─ gls_capture.py        # GLS 화면의 표만 저장 (로그인은 사람이 직접)
+      └─ normalize.py          # 저장한 표 정리 + 시드와 합치기
 ```
 
 ## 데이터 출처
@@ -22,8 +29,9 @@ backend/
 |---|---|---|
 | 과목명, 구분(기초필수·전공코어·전공심화·실험실습·학석공통 등), 로드맵 학년·학기 | 2026 소프트웨어학과 로드맵 이미지 (노션 1120 회의록) | 시드에 들어 있음 |
 | 분야 태그 A/E/W/C, 공통·이론 | 노션 "교과목 커버리지"·"SW-MBTI" 페이지의 팀 분류 | 시드에 들어 있음 (팀 임시 분류) |
-| 학수번호, 학점 | GLS 2026 학부 교육과정 + 대학원 교육과정(소프트웨어융합대학 8개 학과) | 수집함. 로드맵 76과목 중 56과목 연결 |
-| 선수과목, 개설 여부 | 교육과정 화면에 없음 | **확인 필요** |
+| 학수번호, 개설 여부, 교과목 개요 | 학과 홈페이지 학사과정·대학원과정 교육과정 (cse.skku.edu) | `homepage/` 로 수집. 로드맵 76과목 중 73과목 연결 |
+| 학수번호, 학점 (확인용) | GLS 2026 학부 교육과정 + 대학원 교육과정(소프트웨어융합대학 8개 학과) | `gls/` 로 수집. 로드맵 76과목 중 56과목 연결, 홈페이지 값과 모두 같음 |
+| 선수과목 | 두 교육과정 화면 모두 없음 | **확인 필요** |
 | 추천 점수용 태그, 교수님 우선순위 | 교수님 자문 | `course_tags` 테이블만 만들어 둠 |
 
 ## 1. Supabase 에 테이블 만들기 (처음 한 번)
@@ -36,7 +44,7 @@ backend/
 
 > 무료 프로젝트는 일주일 동안 사용이 거의 없으면 자동으로 일시정지된다. 통합·발표 전에 대시보드에서 켜져 있는지 확인할 것.
 
-## 2. GLS 에서 학수번호·학점 수집
+## 2. 수집 준비
 
 ### 처음 한 번: 가상환경 만들기 (Ubuntu / WSL 기준)
 
@@ -57,14 +65,29 @@ python -m playwright install chromium
 ```bash
 cd ~/2026fall_41class_team1                # 저장소 위치
 source .venv/bin/activate
-cd backend/crawler
 ```
 
 `git` 명령은 가상환경을 켜지 않아도 된다. 끌 때는 `deactivate` 또는 터미널을 닫는다.
 
-### 2-1. 수집
+## 3. 학과 홈페이지에서 수집 (기본)
 
 ```bash
+cd backend/crawler/homepage
+python homepage_curriculum.py
+cat out/homepage_report.txt
+```
+
+- 로그인 없이 학사과정(`dept_curriculum.do`)과 대학원과정(`grad_curriculum.do`)을 차례로 읽는다. 한 쪽에 30과목씩이라 쪽을 넘기며 읽고, 쪽마다 1초 쉰다.
+- 결과: `out/homepage_courses.csv·json` (홈페이지 전체 과목 + 개요), `out/homepage_merged.csv·json` (로드맵 76과목에 맞춘 결과), `out/homepage_report.txt`
+- 같은 이름이 학사·대학원에 다른 학수번호로 있으면(예: 정보보호개론 SWE3025 / ESW4020) 로드맵 구분이 학석공통이면 대학원 쪽을 쓴다.
+- 저장 전에 이메일·전화번호·10자리 숫자 모양을 검사해서 있으면 저장하지 않는다.
+
+## 4. GLS 에서 수집 (확인용, 로그인 필요)
+
+### 4-1. 수집
+
+```bash
+cd backend/crawler/gls
 python gls_capture.py            # 정보광장(kingoinfo.skku.edu)이 열린다
 ```
 
@@ -73,7 +96,7 @@ python gls_capture.py            # 정보광장(kingoinfo.skku.edu)이 열린다
 2. 표가 보이면 터미널에서 **Enter**. 스크롤해서 새 과목이 보이면 또 **Enter**.
 3. 다 끝나면 `q` + Enter. GLS 로그아웃도 할 것.
 
-### 2-2. 정리하고 로드맵과 맞추기
+### 4-2. 정리하고 로드맵과 맞추기
 
 ```bash
 python normalize.py
@@ -91,4 +114,4 @@ python normalize.py
 - 크롤러는 Enter 를 누른 순간 **화면에 보이는 표 글자만** 읽는다. 클릭·입력·메뉴 이동을 하지 않는다.
   → 교육과정 화면에서만 Enter 를 누를 것. 성적·시간표 화면에서 누르면 그 표가 저장된다.
 - 쿠키를 저장하지 않는 새 브라우저를 쓰고, 끝나면 닫는다.
-- `raw*/`, `out*/` 는 `.gitignore` 에 들어 있어 커밋되지 않는다. 화면 상단의 이름·학번 등이 섞일 수 있으므로 공유하지 않는다.
+- `raw*/`, `out*/` 는 `gls/`, `homepage/` 아래에 생기고 `.gitignore` 에 들어 있어 커밋되지 않는다. GLS 화면 상단의 이름·학번 등이 섞일 수 있으므로 공유하지 않는다.

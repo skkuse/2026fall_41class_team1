@@ -4,9 +4,11 @@
 *.pem
 *_storage_state.json
 
-# GLS 수집 결과 (화면 원본에 개인정보가 섞일 수 있음)
+# 수집 결과 (GLS 화면 원본에 개인정보가 섞일 수 있음). gls/, homepage/ 아래 폴더 포함
 backend/crawler/raw*/
 backend/crawler/out*/
+backend/crawler/**/raw*/
+backend/crawler/**/out*/
 
 # Python
 __pycache__/

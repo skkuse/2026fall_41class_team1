@@ -23,9 +23,11 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))   # backend/crawler/course_names.py
+from course_names import name_key  # noqa: E402  (과목명 비교 규칙은 홈페이지 수집과 공유)
 RAW_DIR = HERE / "raw"
 OUT_DIR = HERE / "out"
-SEED = HERE.parent / "db" / "seed_courses_2026.csv"
+SEED = HERE.parents[1] / "db" / "seed_courses_2026.csv"
 
 # GLS 표의 머리글(헤더)이 정확히 무엇인지 아직 모르므로, 비슷한 이름을 여러 개 받아 준다.
 # 실제 화면을 보고 빠진 이름이 있으면 여기에 추가하면 된다.
@@ -64,23 +66,6 @@ def match_header(cell: str) -> str | None:
         if any(c.startswith(a) for a in aliases):
             return field
     return None
-
-
-# 로드맵과 GLS 가 같은 과목을 다르게 적는 경우 (2026-11-24 실제 수집 결과에서 확인)
-SPELLING = [
-    ("네트웍", "네트워크"),   # GLS '컴퓨터네트웍개론' = 로드맵 '컴퓨터네트워크개론'
-    ("sw", "소프트웨어"),     # 로드맵 '오픈소스SW실습' = GLS '오픈소스소프트웨어실습'
-]
-
-
-def name_key(name: str) -> str:
-    """과목명 비교용 키: 공백·가운데점·괄호 내용 제거, Ⅰ/Ⅱ → 1/2, 표기 차이 통일."""
-    s = (name or "").replace("Ⅰ", "1").replace("Ⅱ", "2").replace("Ⅲ", "3")
-    s = re.sub(r"\(.*?\)|\[.*?\]", "", s)
-    s = re.sub(r"[\s·・\.\-_/]", "", s).lower()
-    for a, b in SPELLING:
-        s = s.replace(a, b)
-    return s
 
 
 def parse_credits(s: str) -> str:
@@ -194,7 +179,7 @@ def main() -> int:
         w.writeheader()
         w.writerows(merged)
 
-    from to_sql import csv_to_sql  # 같은 폴더의 도우미
+    from to_sql import csv_to_sql  # backend/crawler/to_sql.py (공용)
     (OUT_DIR / "courses_upsert.sql").write_text(csv_to_sql(str(OUT_DIR / "courses_merged.csv")),
                                                 encoding="utf-8")
 

@@ -4,8 +4,8 @@
 빈 칸은 NULL 로 넣는다.
 
 사용법
-    python to_sql.py ../db/seed_courses_2026.csv  > ../db/seed_courses_2026.sql
-    python to_sql.py out/courses_merged.csv       > out/courses_upsert.sql
+    python to_sql.py ../db/seed_courses_2026.csv  > ../db/seed_courses_2026.sql      (backend/crawler 에서)
+    python to_sql.py gls/out/courses_merged.csv   > gls/out/courses_upsert.sql
 """
 from __future__ import annotations
 
